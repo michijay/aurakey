@@ -1,0 +1,15 @@
+[Unit]
+Description=AuraKey Drivecrypt Service
+DefaultDependencies=no
+After=systemd-udev-settle.service systemd-remount-fs.service plymouth-start.service
+Before=local-fs.target
+
+[Service]
+Type=oneshot
+RemainAfterExit=yes
+ExecStart=/opt/aurakey.sh --decrypt
+StandardInput=null
+StandardOutput=journal
+
+[Install]
+WantedBy=local-fs.target
