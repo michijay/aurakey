@@ -1,5 +1,7 @@
 # max tries to enter password before entering emergencymode
 MAX_TRIES=5
+# startup delay. should be >=5 to fix problems with nvidia drivers
+DELAY=0
 # mappername for the encrypted drive
 MAPPER_NAME="darkhome"
 # UUID of the encrypted partiton. use: blkid | grep "crypto_LUKS" | cut -d"\"" -f2

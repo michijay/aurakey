@@ -4,7 +4,7 @@
 # Author: Michael Janssen <m.janssen@lyrah.net>
 # License: GPLv3 (See README.md for details)
 
-VERSION="1.5-2"
+VERSION="1.6-0"
 TRIES=0 # needs to be zero to start the loop
 
 # search for external config and load it
@@ -12,13 +12,16 @@ TRIES=0 # needs to be zero to start the loop
 
 if [[ "$2" == "--silent" ]]
 	then
-		SILENT_MODE="1"
+		VERBOSE_MODE="0"
+	elif [[ "$2" == "--verbose" ]]
+	then
+		VERBOSE_MODE="2"
 	else
-		SILENT_MODE="0"
+		VERBOSE_MODE="1"
 	fi
 
 	# Only show if not in silent mode
-	if [[ "$SILENT_MODE" == "0" ]]
+	if [[ "$VERBOSE_MODE" != "0" ]]
 	then
 		echo ""
 		echo "     o                                      oooo   oooo                       "
@@ -35,8 +38,12 @@ if [[ "$2" == "--silent" ]]
 
 if [[ "$1" == "--decrypt" ]]
 then
-	# add a delay, fixed probs with nvidia
-	sleep 5
+
+	# startup delay
+	if [[ "$DELAY" != "0" ]]
+	then
+		sleep "$DELAY"
+	fi
 
 	for i in "${KEY_UUIDS[@]}"
 	do
@@ -47,6 +54,10 @@ then
 
 			# locate keyfile on the usbstick
 			KEYFILE2=$(/usr/bin/find /media/"$i" -iname "$KEYFILE" -print -quit)
+			if [ "$VERBOSE_MODE" == "2" ]
+			then
+				echo "AuraKey : keyfile found : $KEYFILE2"
+			fi
 
 			while [ $TRIES -lt $MAX_TRIES ]
 			do
@@ -65,13 +76,21 @@ then
 				# Duke, nuke them!
 				if [ "$INPUT_HASH" == "$NUKE_HASH" ]
 				then
+					if [ "$VERBOSE_MODE" == "2" ]
+					then
+						echo "AuraKey : Nuke-Password entered! Destroying LUKS-Header and keyfile : $KEYFILE2"
+						DDSTATUS="progress"
+					else
+						DDSTATUS="none"
+					fi
+
 					# destroy the keyfile
-					dd if=/dev/urandom of="$KEYFILE2" bs=1 count=4096 conv=fsync status=none
+					dd if=/dev/urandom of="$KEYFILE2" bs=1 count=4096 conv=fsync status="$DDSTATUS"
 					# destroy the LUKS-Header
-					dd if=/dev/urandom of=/dev/disk/by-uuid/"$LUKS_UUID" bs=1M count=32 conv=fsync status=none
+					dd if=/dev/urandom of=/dev/disk/by-uuid/"$LUKS_UUID" bs=1M count=32 conv=fsync status="$DDSTATUS"
 					sync
 
-					if [ "$SILENT_MODE" -eq 0 ]
+					if [ "$VERBOSE_MODE" != "0" ]
 					then
 						echo "Data neutralized."
 						umount /media/"$i"
@@ -82,7 +101,7 @@ then
 					rmdir /media/"$i"
 					exit 0
 				fi
-#
+
 				# 1. Find the marker position in the file
 				OFFSET=$(grep -aob "MYKEYSTART" "$KEYFILE2" | head -n 1 | cut -d: -f1)
 
@@ -90,16 +109,24 @@ then
 				then
 					# Calculate start of encrypted data (Marker is 10 bytes long)
 					KEY_START=$((OFFSET + 10))
-
+					if [ "$VERBOSE_MODE" == "2" ]
+					then
+						echo "AuraKey : Found GPG-Encrypted keyfile at : $KEY_START inside of : $KEYFILE2"
+					fi
 					# Use dd to skip the image part and feed the rest into GPG
 					DECRYPT_CMD=(/usr/bin/dd "if=$KEYFILE2" bs=1 "skip=$KEY_START")
 				else
+					if [ "$VERBOSE_MODE" == "2" ]
+					then
+						echo "AuraKey : No GPG-Encrypted keyfile found inside of : $KEYFILE2 !"
+						echo "I will try to use it directly..."
+					fi
 					# Fallback: If no marker is found, try to read the file normally
 					DECRYPT_CMD=(/usr/bin/cat "$KEYFILE2")
 				fi
 
 				TMP_KEY="/tmp/luks_tmp_$(date +%s).bin"
-				if [ "$SILENT_MODE" -eq 0 ]
+				if [ "$VERBOSE_MODE" != "0" ]
 				then
 					echo "Decrypting GPG payload to RAM..."
 				fi
@@ -108,10 +135,16 @@ then
 				then
 					/usr/sbin/cryptsetup open /dev/disk/by-uuid/"$LUKS_UUID" "$MAPPER_NAME" --key-file="$TMP_KEY"
 					mount /dev/mapper/"$MAPPER_NAME" "$MOUNT_POINT"
-					echo "AuraKey : LUKS drive successfully mounted at $MOUNT_POINT"
+					if [ "$VERBOSE_MODE" != "0" ]
+					then
+						echo "AuraKey : LUKS drive successfully mounted at $MOUNT_POINT"
+						RMMODE="rm -v -f"
+					else
+						RMMODE="rm -f"
+					fi
 					umount /media/"$i"
 					rmdir /media/"$i"
-					dd if=/dev/urandom of="$TMP_KEY" bs=1024 count=4 status=none && rm -f "$TMP_KEY"
+					dd if=/dev/urandom of="$TMP_KEY" bs=1024 count=4 status="$DDSTATUS" && "$RMMODE" "$TMP_KEY"
 					exit 0
 				else
 					echo "AuraKey : Wrong password or corrupted key! Attempt $((TRIES+1)) of $MAX_TRIES."
@@ -121,7 +154,7 @@ then
 			done
 
 			# boot into emergencymode after $MAX_TRIES
-			if [ "$SILENT_MODE" -eq 0 ]
+			if [ "$VERBOSE_MODE" != "0" ]
 			then
 				echo "AuraKey : Too many failed attempts. System will enter emergency mode."
 				umount /media/"$i"
@@ -151,7 +184,7 @@ then
 	fi
 
 	# Generate 4KB of high-entropy random data
-	dd if=/dev/urandom of="$RAW_KEYFILE" bs=4096 count=1 status=none
+	dd if=/dev/urandom of="$RAW_KEYFILE" bs=4096 count=1 status=progress
 	chmod 400 "$RAW_KEYFILE"
 
 	# Encrypt the raw key using GPG (AES-256)
@@ -160,7 +193,7 @@ then
 
 	# Securely overwrite the temporary raw key with random data before deletion
 	echo "Wiping temporary file..."
-	dd if=/dev/urandom of="$RAW_KEYFILE" bs=4096 count=1 conv=fsync status=none
+	dd if=/dev/urandom of="$RAW_KEYFILE" bs=4096 count=1 conv=fsync status=progress
 	rm -f "$RAW_KEYFILE"
 
 	echo "Success: 'secret.key.gpg' created."
@@ -273,7 +306,7 @@ then
 	echo "Usage: $0 [OPTION] [ARGUMENTS]"
 	echo ""
 	echo "Options:"
-	echo "   --decrypt [--silent]" "Start the decryption process and mount the drive."
+	echo "   --decrypt [ --silent | --verbose ]" "Start the decryption process and mount the drive."
 	echo "   --create-keyfile [path]" "Generate a new 4KB random key and encrypt it via GPG."
 	echo "   --hide-keyfile <key> <img_in> <img_out>" "Hide a GPG-keyfile inside a JPG image."
 	echo "   --add-keyfile-to-drive <img_key>" "Add the hidden key from an image to a LUKS slot."
