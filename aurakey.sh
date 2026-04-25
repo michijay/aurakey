@@ -4,7 +4,7 @@
 # Author: Michael Janssen <m.janssen@lyrah.net>
 # License: GPLv3 (See README.md for details)
 
-VERSION="1.6-0"
+VERSION="1.6-1"
 TRIES=0 # needs to be zero to start the loop
 
 # search for external config and load it
@@ -20,7 +20,7 @@ if [[ "$2" == "--silent" ]]
 		VERBOSE_MODE="1"
 	fi
 
-	# Only show if not in silent mode
+	# only show if not in silent mode
 	if [[ "$VERBOSE_MODE" != "0" ]]
 	then
 		echo ""
@@ -35,6 +35,18 @@ if [[ "$2" == "--silent" ]]
 		echo "|S|t|e|g|a|n|o|g|r|a|p|h|i|c| |L|U|K|S| |K|e|y|-|M|a|n|a|g|e|m|e|n|t|T|o|o|l|"
 		echo "+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+"
 	fi
+
+# check if uuid of the luks-drive exist
+if [ ! -b /dev/disk/by-uuid/"$LUKS_UUID" ]
+then
+	if [ "$VERBOSE_MODE" -ge "1" ]
+	then
+		echo "Error: LUKS drive not found!"
+		echo "Please check the LUKS_UUID entry in your aurakey.cfg"
+	fi
+	sleep 1
+	exit 1
+fi
 
 if [[ "$1" == "--decrypt" ]]
 then
