@@ -4,7 +4,7 @@
 # Author: Michael Janssen <m.janssen@lyrah.net>
 # License: GPLv3 (See README.md for details)
 
-VERSION="1.7-2"
+VERSION="1.7-3"
 TRIES=0 # needs to be zero to start the loop
 
 # search for external config and load it
@@ -378,7 +378,7 @@ then
 	echo "   --create-keyfile [path]" "Generate a new 4KB random key and encrypt it via GPG."
 	echo "   --hide-keyfile <key> <img_in> <img_out>" "Hide a GPG-keyfile inside a JPG image."
 	echo "   --add-keyfile-to-drive <img_key>" "Add the hidden key from an image to a LUKS slot."
-	echo "   --swap" "Create an encrypted swapdrive."
+	echo "   --swap [ --silent | --verbose ]" "Create an encrypted swapdrive."
 	echo "   --help" "Show this help message."
 	echo ""
 	echo "Examples:"
