@@ -15,3 +15,6 @@ KEYFILE="all_cats_black.jpg"
 # nukemode to destroy your data!
 # generate your nuke-hash via: "read -r -s -p "Nuke-Password: " p; echo; printf '%s' "$p" | sha256sum; unset p"
 NUKE_HASH="xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"
+# swapdevice and mapper
+SWAP_DEV="/dev/sda3"
+SWAP_MAPPER="darkswap"

@@ -4,7 +4,7 @@
 # Author: Michael Janssen <m.janssen@lyrah.net>
 # License: GPLv3 (See README.md for details)
 
-VERSION="1.6-1"
+VERSION="1.7-2"
 TRIES=0 # needs to be zero to start the loop
 
 # search for external config and load it
@@ -137,7 +137,7 @@ then
 					DECRYPT_CMD=(/usr/bin/cat "$KEYFILE2")
 				fi
 
-				TMP_KEY="/tmp/luks_tmp_$(date +%s).bin"
+				TMP_KEY=$(mktemp /tmp/aurakey_tmp_XXXXXX.bin)
 				if [ "$VERBOSE_MODE" != "0" ]
 				then
 					echo "Decrypting GPG payload to RAM..."
@@ -282,7 +282,7 @@ then
         exit 1
     fi
 
-    TMP_KEY="/tmp/luks_tmp_$(date +%s).bin"
+    TMP_KEY=$(mktemp /tmp/aurakey_tmp_XXXXXX.bin)
     echo "Decrypting GPG payload to RAM..."
     
 	if ! dd if="$2" bs=1 skip=$((OFFSET + 10)) 2>/dev/null | gpg --decrypt --batch --no-tty --pinentry-mode loopback --homedir /tmp --passphrase-fd 3 3<<< "$GPG_PW" > "$TMP_KEY"
@@ -313,6 +313,62 @@ then
     exit 0
 fi
 
+if [[ "$1" == "--swap" ]]
+then
+
+	if [ "$VERBOSE_MODE" != "0" ]
+	then
+		echo "AuraKey: Initializing encrypted swap on $SWAP_DEV..."
+	fi
+
+	if [[ -z "$SWAP_DEV" ]] || [[ -z "$SWAP_MAPPER" ]]
+	then
+		echo "ERROR : Swap-Variables are not defined!"
+		exit 1
+	fi
+
+	if [ ! -b "$SWAP_DEV" ]
+	then
+		echo "ERROR: Swap device $SWAP_DEV not found!"
+		exit 1
+    fi
+
+	if [ "$VERBOSE_MODE" == "0" ]
+	then
+		swapoff "$SWAP_DEV" >/dev/null 2>&1 || true
+		wipefs -a "$SWAP_DEV" >/dev/null 2>&1
+
+		head -c 64 /dev/urandom | cryptsetup open --type plain --key-file - --cipher aes-xts-plain64 --key-size 512 "$SWAP_DEV" "$SWAP_MAPPER" >/dev/null 2>&1
+
+		mkswap "/dev/mapper/$SWAP_MAPPER" >/dev/null 2>&1
+		swapon "/dev/mapper/$SWAP_MAPPER" >/dev/null 2>&1
+
+	elif [ "$VERBOSE_MODE" == "2" ]
+	then
+		echo "Unmounting old swap and wiping filesystem..."
+		swapoff --verbose "$SWAP_DEV" || true
+		wipefs -a "$SWAP_DEV"
+
+		echo "Encrypting swap device: $SWAP_DEV"
+		head -c 64 /dev/urandom | cryptsetup open --type plain --key-file - --cipher aes-xts-plain64 --key-size 512 "$SWAP_DEV" "$SWAP_MAPPER"
+
+		echo "Creating encrypted swap..."
+		mkswap --verbose "/dev/mapper/$SWAP_MAPPER"
+
+		echo "Activating encrypted swap..."
+		swapon --verbose "/dev/mapper/$SWAP_MAPPER"
+	else
+		swapoff "$SWAP_DEV" || true
+		wipefs -a "$SWAP_DEV"
+
+		head -c 64 /dev/urandom | cryptsetup open --type plain --key-file - --cipher aes-xts-plain64 --key-size 512 "$SWAP_DEV" "$SWAP_MAPPER"
+
+		mkswap "/dev/mapper/$SWAP_MAPPER"
+		swapon "/dev/mapper/$SWAP_MAPPER"
+	fi
+
+fi
+
 if [[ -z "$1" ]] || [[ "$1" == "--help" ]]
 then
 	echo "Usage: $0 [OPTION] [ARGUMENTS]"
@@ -322,6 +378,7 @@ then
 	echo "   --create-keyfile [path]" "Generate a new 4KB random key and encrypt it via GPG."
 	echo "   --hide-keyfile <key> <img_in> <img_out>" "Hide a GPG-keyfile inside a JPG image."
 	echo "   --add-keyfile-to-drive <img_key>" "Add the hidden key from an image to a LUKS slot."
+	echo "   --swap" "Create an encrypted swapdrive."
 	echo "   --help" "Show this help message."
 	echo ""
 	echo "Examples:"
