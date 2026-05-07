@@ -1,7 +1,7 @@
 # AuraKey
 > Steganographic LUKS management tool for hiding GPG-encrypted keys in JPEGs with integrated Nuke functionality.
 
-## AuraKey (V. 1.6-0)
+## AuraKey (V. 1.7-3)
 **Steganographic LUKS Key-Management & Nuke Utility**
 
 AuraKey is a specialized security tool designed to manage LUKS-encrypted volumes using steganography. It allows users to hide GPG-encrypted keyfiles inside common image files (JPEG), providing a layer of "security by obscurity." 
@@ -42,6 +42,9 @@ KEYFILE="camouflage_image.jpg"
 NUKE_HASH="your_sha256_nuke_hash"
 # max tries to enter password before entering emergencymode
 MAX_TRIES=3
+# swapdevice and mapper
+SWAP_DEV="/dev/sda3"
+SWAP_MAPPER="darkswap"
 ```
 ### 3. Systemd Integration
 To unlock your drive automatically at boot, create /etc/systemd/system/aurakey.service:
@@ -56,6 +59,7 @@ Before=local-fs.target
 Type=oneshot
 RemainAfterExit=yes
 ExecStart=/opt/aurakey.sh --decrypt
+ExecStart=/opt/aurakey.sh --swap
 StandardInput=tty
 TTYPath=/dev/tty1
 StandardOutput=journal
@@ -88,6 +92,8 @@ Generate and hide a Key
 ```
 ## Changelog
 
+	1.7-3 (2026-MAY-07): Swapfunction added - Bugfixing
+	1.6-1 (2026-APR-25): Bugfix and UUID check added
 	1.6-0 (2026-APR-18): Added verbose-mode; moved delay to config
     1.5-2 (2026-APR-16): Switched to external config; fixed systemd-ask-password TTY issues.
     1.4-0 (2026-APR-14): Added steganography functions and ASCII banner.
