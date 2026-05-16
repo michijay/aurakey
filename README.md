@@ -1,8 +1,8 @@
 # AuraKey
 > Steganographic 2FA LUKS management tool for hiding GPG-encrypted keys in JPEGs with integrated Nuke functionality.
 
-## AuraKey (V. 1.7-3)
-**Steganographic LUKS Key-Management & Nuke Utility**
+## AuraKey (V. 1.7-4)
+**Steganographic 2FA LUKS Key-Management & Nuke Utility**
 
 AuraKey is a specialized security tool designed to manage LUKS-encrypted volumes using steganography. It allows users to hide GPG-encrypted keyfiles inside common image files (JPEG), providing a layer of "security by obscurity." 
 
