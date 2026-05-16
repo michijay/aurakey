@@ -4,7 +4,7 @@
 # Author: Michael Janssen <m.janssen@lyrah.net>
 # License: GPLv3 (See README.md for details)
 
-VERSION="1.7-4"
+VERSION="1.7-5"
 TRIES=0 # needs to be zero to start the loop
 
 # search for external config and load it
@@ -315,7 +315,6 @@ fi
 
 if [[ "$1" == "--swap" ]]
 then
-
 	if [ "$VERBOSE_MODE" != "0" ]
 	then
 		echo "AuraKey: Initializing encrypted swap on $SWAP_DEV..."
@@ -327,44 +326,73 @@ then
 		exit 1
 	fi
 
-	if [ ! -b "$SWAP_DEV" ]
+	if [ ! -b "$SWAP_DEV" ] && [ ! -f "$SWAP_DEV" ]
 	then
-		echo "ERROR: Swap device $SWAP_DEV not found!"
+		echo "ERROR: Swap device or file $SWAP_DEV not found!"
 		exit 1
-    fi
+	fi
+
+    REAL_SWAP_DEV="$SWAP_DEV"
+    USING_LOOP=false
+    
+    if [ -f "$SWAP_DEV" ]
+    then
+		swapoff "$SWAP_DEV" >/dev/null 2>&1 || true
+		LOOP_DEV=$(losetup -f)
+		losetup "$LOOP_DEV" "$SWAP_DEV"
+		REAL_SWAP_DEV="$LOOP_DEV"
+		USING_LOOP=true
+	fi
 
 	if [ "$VERBOSE_MODE" == "0" ]
 	then
-		swapoff "$SWAP_DEV" >/dev/null 2>&1 || true
-		wipefs -a "$SWAP_DEV" >/dev/null 2>&1
+		swapoff "$REAL_SWAP_DEV" >/dev/null 2>&1 || true
 
-		head -c 64 /dev/urandom | cryptsetup open --type plain --key-file - --cipher aes-xts-plain64 --key-size 512 "$SWAP_DEV" "$SWAP_MAPPER" >/dev/null 2>&1
+		if [ "$USING_LOOP" = false ]
+		then
+			wipefs -a "$REAL_SWAP_DEV" >/dev/null 2>&1
+		fi
 
-		mkswap "/dev/mapper/$SWAP_MAPPER" >/dev/null 2>&1
-		swapon "/dev/mapper/$SWAP_MAPPER" >/dev/null 2>&1
+        head -c 64 /dev/urandom | cryptsetup open --type plain --key-file - --cipher aes-xts-plain64 --key-size 512 "$REAL_SWAP_DEV" "$SWAP_MAPPER" >/dev/null 2>&1
+
+        mkswap "/dev/mapper/$SWAP_MAPPER" >/dev/null 2>&1
+        swapon "/dev/mapper/$SWAP_MAPPER" >/dev/null 2>&1
 
 	elif [ "$VERBOSE_MODE" == "2" ]
-	then
-		echo "Unmounting old swap and wiping filesystem..."
-		swapoff --verbose "$SWAP_DEV" || true
-		wipefs -a "$SWAP_DEV"
+    then
+        echo "Unmounting old swap and wiping filesystem..."
+        swapoff --verbose "$REAL_SWAP_DEV" || true
 
-		echo "Encrypting swap device: $SWAP_DEV"
-		head -c 64 /dev/urandom | cryptsetup open --type plain --key-file - --cipher aes-xts-plain64 --key-size 512 "$SWAP_DEV" "$SWAP_MAPPER"
+        if [ "$USING_LOOP" = false ]
+		then
+			wipefs -a "$REAL_SWAP_DEV"
+		fi
 
-		echo "Creating encrypted swap..."
-		mkswap --verbose "/dev/mapper/$SWAP_MAPPER"
+        echo "Encrypting swap device: $REAL_SWAP_DEV"
+        head -c 64 /dev/urandom | cryptsetup open --type plain --key-file - --cipher aes-xts-plain64 --key-size 512 "$REAL_SWAP_DEV" "$SWAP_MAPPER"
 
-		echo "Activating encrypted swap..."
-		swapon --verbose "/dev/mapper/$SWAP_MAPPER"
-	else
-		swapoff "$SWAP_DEV" || true
-		wipefs -a "$SWAP_DEV"
+        echo "Creating encrypted swap..."
+        mkswap --verbose "/dev/mapper/$SWAP_MAPPER"
 
-		head -c 64 /dev/urandom | cryptsetup open --type plain --key-file - --cipher aes-xts-plain64 --key-size 512 "$SWAP_DEV" "$SWAP_MAPPER"
+        echo "Activating encrypted swap..."
+        swapon --verbose "/dev/mapper/$SWAP_MAPPER"
+    else
+        swapoff "$REAL_SWAP_DEV" || true
+ 
+		if [ "$USING_LOOP" = false ]
+		then
+			wipefs -a "$REAL_SWAP_DEV"
+		fi
+
+        head -c 64 /dev/urandom | cryptsetup open --type plain --key-file - --cipher aes-xts-plain64 --key-size 512 "$REAL_SWAP_DEV" "$SWAP_MAPPER"
 
 		mkswap "/dev/mapper/$SWAP_MAPPER"
 		swapon "/dev/mapper/$SWAP_MAPPER"
+    fi
+
+	if [ "$USING_LOOP" = true ]
+    then
+		losetup -d "$REAL_SWAP_DEV" >/dev/null 2>&1 || true
 	fi
 
 fi
