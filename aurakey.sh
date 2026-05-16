@@ -4,7 +4,7 @@
 # Author: Michael Janssen <m.janssen@lyrah.net>
 # License: GPLv3 (See README.md for details)
 
-VERSION="1.7-5"
+VERSION="1.7-6"
 TRIES=0 # needs to be zero to start the loop
 
 # search for external config and load it
@@ -337,6 +337,13 @@ then
     
     if [ -f "$SWAP_DEV" ]
     then
+
+		# force the kernel to load the loop-driver now!
+		if [ ! -b /dev/loop0 ]; then
+			modprobe loop >/dev/null 2>&1
+			sleep 1
+		fi
+
 		swapoff "$SWAP_DEV" >/dev/null 2>&1 || true
 		LOOP_DEV=$(losetup -f)
 		losetup "$LOOP_DEV" "$SWAP_DEV"
