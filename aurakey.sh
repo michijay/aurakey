@@ -4,29 +4,48 @@
 # Author: Michael Janssen <m.janssen@lyrah.net>
 # License: GPLv3 (See README.md for details)
 
-VERSION="1.8-0"
+VERSION="1.8-2"
 TRIES=0 # needs to be zero to start the loop
 
 # check for config argument
 if [[ "$1" == "--decrypt" ]]
 then
-	if [[ -n "$2" && -f "$2" ]]
+	CONFIG_FILE=""
+
+	# check if argument 2 or 3 contains a config filename
+	if [[ -n "$2" && "$2" == *.cfg ]]
 	then
-		CONFIG_FILE="$2"
-	elif [[ -n "$3" && -f "$3" ]]
+		if [[ -f "$2" ]]
+		then
+			CONFIG_FILE="$2"
+		else
+			echo "Error: Config file '$2' not found!" >&2
+			exit 1
+		fi
+	elif [[ -n "$3" && "$3" == *.cfg ]]
 	then
-		CONFIG_FILE="$3"
+		if [[ -f "$3" ]]
+		then
+			CONFIG_FILE="$3"
+		else
+			echo "Error: Config file '$3' not found!" >&2
+			exit 1
+		fi
 	fi
 
-	# search for external config and load it
+	# load config file or use default list
 	if [[ -n "$CONFIG_FILE" ]]
 	then
 		source "$CONFIG_FILE"
 	else
-		# else try default config filenames
-		{ source ./aurakey.cfg || source /etc/aurakey.cfg || source /usr/local/etc/aurakey.cfg ; } 2>/dev/null || echo "Warning: No config file found!"
+		# try default config filenames
+		source ./aurakey.cfg || source /etc/aurakey.cfg || source /usr/local/etc/aurakey.cfg || {
+			echo "Error: No config file found!" >&2
+			exit 1
+		}
 	fi
 fi
+
 
 if [[ "$2" == "--silent" ]]
 then
@@ -427,7 +446,7 @@ then
 	echo "Usage: $0 [OPTION] [ARGUMENTS]"
 	echo ""
 	echo "Options:"
-	echo "   --decrypt [ --silent | --verbose ] <optional-config-file>" "Start the decryption process and mount the drive."
+	echo "   --decrypt [ --silent | --verbose ] <optional-config-file.cfg>" "Start the decryption process and mount the drive."
 	echo "   --create-keyfile [path]" "Generate a new 4KB random key and encrypt it via GPG."
 	echo "   --hide-keyfile <key> <img_in> <img_out>" "Hide a GPG-keyfile inside a JPG image."
 	echo "   --add-keyfile-to-drive <img_key>" "Add the hidden key from an image to a LUKS slot."
