@@ -4,34 +4,32 @@
 # Author: Michael Janssen <m.janssen@lyrah.net>
 # License: GPLv3 (See README.md for details)
 
-VERSION="1.8-2"
+VERSION="1.8-3"
 TRIES=0 # needs to be zero to start the loop
 
 # check for config argument
-if [[ "$1" == "--decrypt" ]]
-then
-	CONFIG_FILE=""
+CONFIG_FILE=""
 
-	# check if argument 2 or 3 contains a config filename
-	if [[ -n "$2" && "$2" == *.cfg ]]
+# check if argument 2 or 3 contains a config filename
+if [[ -n "$2" && "$2" == *.cfg ]]
+then
+	if [[ -f "$2" ]]
 	then
-		if [[ -f "$2" ]]
-		then
-			CONFIG_FILE="$2"
-		else
-			echo "Error: Config file '$2' not found!" >&2
-			exit 1
-		fi
-	elif [[ -n "$3" && "$3" == *.cfg ]]
-	then
-		if [[ -f "$3" ]]
-		then
-			CONFIG_FILE="$3"
-		else
-			echo "Error: Config file '$3' not found!" >&2
-			exit 1
-		fi
+		CONFIG_FILE="$2"
+	else
+		echo "Error: Config file '$2' not found!" >&2
+		exit 1
 	fi
+elif [[ -n "$3" && "$3" == *.cfg ]]
+then
+	if [[ -f "$3" ]]
+	then
+		CONFIG_FILE="$3"
+	else
+		echo "Error: Config file '$3' not found!" >&2
+		exit 1
+	fi
+fi
 
 	# load config file or use default list
 	if [[ -n "$CONFIG_FILE" ]]
@@ -44,7 +42,7 @@ then
 			exit 1
 		}
 	fi
-fi
+#fi
 
 
 if [[ "$2" == "--silent" ]]
