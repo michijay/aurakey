@@ -4,7 +4,7 @@
 # Author: Michael Janssen <m.janssen@lyrah.net>
 # License: GPLv3 (See README.md for details)
 
-VERSION="1.8-3"
+VERSION="1.9-0"
 TRIES=0 # needs to be zero to start the loop
 
 # check for config argument
@@ -44,6 +44,37 @@ fi
 	fi
 #fi
 
+ask_password() {
+    local prompt="$1"
+    local pass=""
+
+    # 1. Plymouth is activ
+    if command -v plymouth >/dev/null 2>&1 && plymouth --ping 2>/dev/null
+	then
+        pass=$(plymouth ask-for-password --prompt="$prompt")
+
+    # 2. systemd-ask-password is availably
+    elif command -v systemd-ask-password >/dev/null 2>&1
+	then
+        pass=$(systemd-ask-password "$prompt")
+
+    # 3. Interactives terminal
+    elif [ -t 0 ]
+	then
+        echo -n "$prompt " >&2
+        read -rs pass
+        echo "" >&2
+
+    # 4. Non-Interactiv / Early-Boot without Plymouth/systemd (OpenRC/SysVinit at /dev/tty)
+    elif [ -c /dev/tty ]
+	then
+        echo -n "$prompt " >/dev/tty
+        read -rs pass </dev/tty
+        echo "" >/dev/tty
+    fi
+
+    echo "$pass"
+}
 
 if [[ "$2" == "--silent" ]]
 then
@@ -115,7 +146,7 @@ then
 					PASS_MSG="AuraKey : Enter password for cryptdrive (failed tries: $TRIES) :"
 				fi
 				# securely capture password using systemd agent
-				PASSWORD=$(systemd-ask-password "$PASS_MSG")
+				PASSWORD=$(ask_password "$PASS_MSG")
 
 				# calculate hash of entered password
 				INPUT_HASH=$(/usr/bin/printf "%s" "$PASSWORD" | sha256sum | awk '{print $1}')
@@ -310,7 +341,7 @@ then
     fi
 
 	# ask for the password via systemd
-	GPG_PW=$(systemd-ask-password "AuraKey: Enter GPG-Passphrase for hidden key")
+	GPG_PW=$(ask_password "AuraKey: Enter GPG-Passphrase for hidden key")
 
     if [ -z "$GPG_PW" ]; then
         echo "Error: No passphrase entered!"
