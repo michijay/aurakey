@@ -4,7 +4,7 @@
 # Author: Michael Janssen <m.janssen@lyrah.net>
 # License: GPLv3 (See README.md for details)
 
-VERSION="1.9-2"
+VERSION="1.9-3"
 TRIES=0 # needs to be zero to start the loop
 
 # check for config argument
@@ -44,24 +44,24 @@ fi
 	fi
 #fi
 
+# ask password function; check what is installed
 ask_password() {
     local prompt="$1"
     local pass=""
 
-    # 1. Check if a functional controlling terminal (TTY) is available
-    if tty -s < /dev/tty 2>/dev/null; then
-        # Standard interactive prompt (used in running desktop/CLI environments and real TTYs)
+    # 1. Interactive terminal available
+    if [ -t 0 ] && tty -s 2>/dev/null; then
         echo -n "$prompt " >&2
         read -rs pass
         echo "" >&2
 
-    # 2. SysVinit Early-Boot: No active TTY attached -> Switch context via openvt
+    # 2. SysVinit / Early-Boot fallback using openvt with force (-f)
     elif command -v openvt >/dev/null 2>&1; then
         local tmp_file
-        tmp_file=$(mktemp /tmp/aurakey_pass_XXXXXX)
+        tmp_file=$(mktemp /run/aurakey_pass_XXXXXX 2>/dev/null || mktemp /tmp/aurakey_pass_XXXXXX)
 
-        # Launch subshell on VT 7 (-c 7), switch screen focus (-s), and block until done (-w)
-        openvt -c 7 -s -w -- /bin/sh -c "
+        # -f forces openvt to use the VT even if allocated, -s switches to it, -w waits
+        openvt -f -s -w -- /bin/sh -c "
             stty -echo 2>/dev/null
             printf '%s ' \"$prompt\"
             read -r input
@@ -70,17 +70,16 @@ ask_password() {
             printf '%s' \"\$input\" > \"$tmp_file\"
         "
 
-        # Read captured password from RAM tempfile and immediately shred it
         if [ -f "$tmp_file" ]; then
             pass=$(cat "$tmp_file")
             dd if=/dev/urandom of="$tmp_file" bs=1 count=1024 status=none 2>/dev/null
             rm -f "$tmp_file"
         fi
 
-        # Return screen focus back to primary console (TTY 1)
+        # Return screen focus back to TTY 1
         chvt 1 2>/dev/null || true
 
-    # 3. Fallback: Direct hardware access via /dev/console
+    # 3. Direct console input as last resort
     else
         printf "%s " "$prompt" > /dev/console
         stty -F /dev/console -echo 2>/dev/null || true
@@ -161,8 +160,16 @@ then
 				else
 					PASS_MSG="AuraKey : Enter password for cryptdrive (failed tries: $TRIES) :"
 				fi
-				# securely capture password using systemd agent
+				# securely capture the password
 				PASSWORD=$(ask_password "$PASS_MSG")
+
+				# Stop loop immediately if password capture was aborted or empty
+				if [ -z "$PASSWORD" ]
+				then
+					echo "AuraKey : No password entered or prompt aborted."
+					((TRIES++))
+					continue
+				fi
 
 				# calculate hash of entered password
 				INPUT_HASH=$(/usr/bin/printf "%s" "$PASSWORD" | sha256sum | awk '{print $1}')
@@ -254,7 +261,13 @@ then
 				umount /tmp/mountpoint/"$i"
 				rmdir /tmp/mountpoint/"$i"
 				sleep 1
-				systemctl emergency
+				if command -v systemctl >/dev/null 2>&1
+				then
+					systemctl emergency
+				else
+					echo "AuraKey : Entering Emergency Mode (SysVinit)..."
+					/sbin/sulogin /dev/console || /bin/sh
+				fi
 			else
 				umount /tmp/mountpoint/"$i"
 				rmdir /tmp/mountpoint/"$i"

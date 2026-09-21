@@ -1,0 +1,78 @@
+#!/bin/sh
+### BEGIN INIT INFO
+# Provides:          aurakey
+# Required-Start:    $local_fs $remote_fs $syslog
+# Required-Stop:     $all
+# Should-Start:      udev
+# Should-Stop:
+# Default-Start:     2 3 4 5 
+# Default-Stop:      0 1 6
+# Short-Description: AuraKey Drivecrypt Service
+### END INIT INFO
+
+PATH=/sbin:/usr/sbin:/bin:/usr/bin
+
+SCRIPT=/opt/aurakey/aurakey.sh
+
+# Use AuraKey to create encrypted swap: yes oder no
+RUN_SWAP=yes
+
+. /lib/lsb/init-functions
+
+case "$1" in
+    start|decrypt)
+        if [ ! -x "$SCRIPT" ]; then
+            log_failure_msg "$SCRIPT not found or not executable"
+            exit 1
+        fi
+
+        RESULT=0
+
+        # LSB-Meldung vorab ausgeben und Zeile schließen (log_action_msg statt log_daemon_msg)
+        log_action_msg "Starting AuraKey drive decryption..."
+
+        # Zwingend mit Verbindung zur Konsole aufrufen
+        if "$SCRIPT" --decrypt --verbose </dev/tty1 >/dev/tty1 2>&1; then
+            log_action_end_msg 0
+        else
+            log_action_end_msg 1
+            RESULT=1
+        fi
+
+        if [ "$RUN_SWAP" = "yes" ]; then
+            log_action_msg "Executing AuraKey swap..."
+
+            if "$SCRIPT" --swap </dev/tty1 >/dev/tty1 2>&1; then
+                log_action_end_msg 0
+            else
+                log_action_end_msg 1
+                RESULT=1
+            fi
+        fi
+
+        exit "$RESULT"
+        ;;
+
+    stop)
+        log_action_msg "AuraKey: nothing to stop"
+        exit 0
+        ;;
+
+    restart|force-reload)
+        "$0" stop
+        "$0" start
+        ;;
+
+    status)
+        echo "AuraKey is a one-shot initialization script."
+        echo "RUN_SWAP=$RUN_SWAP"
+        exit 0
+        ;;
+
+    *)
+        echo "Usage: $0 {start|decrypt|stop|restart|force-reload|status}"
+        exit 1
+        ;;
+esac
+
+exit 0
