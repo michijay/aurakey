@@ -4,7 +4,7 @@
 # Author: Michael Janssen <m.janssen@lyrah.net>
 # License: GPLv3 (See README.md for details)
 
-VERSION="1.9-0"
+VERSION="1.9-1"
 TRIES=0 # needs to be zero to start the loop
 
 # check for config argument
@@ -127,11 +127,11 @@ then
 	do
 		if [ -b /dev/disk/by-uuid/"$i" ]
 		then
-			mkdir -p /media/"$i"
-			mount /dev/disk/by-uuid/"$i" /media/"$i"
+			mkdir -p /tmp/mountpoint/"$i"
+			mount /dev/disk/by-uuid/"$i" /tmp/mountpoint/"$i"
 
 			# locate keyfile on the usbstick
-			KEYFILE2=$(/usr/bin/find /media/"$i" -iname "$KEYFILE" -print -quit)
+			KEYFILE2=$(/usr/bin/find /tmp/mountpoint/"$i" -iname "$KEYFILE" -print -quit)
 			if [ "$VERBOSE_MODE" == "2" ]
 			then
 				echo "AuraKey : keyfile found : $KEYFILE2"
@@ -171,12 +171,12 @@ then
 					if [ "$VERBOSE_MODE" != "0" ]
 					then
 						echo "Data neutralized."
-						umount /media/"$i"
-						rmdir /media/"$i"
+						umount /tmp/mountpoint/"$i"
+						rmdir /tmp/mountpoint/"$i"
 						shutdown -h now
 					fi
-					umount /media/"$i"
-					rmdir /media/"$i"
+					umount /tmp/mountpoint/"$i"
+					rmdir /tmp/mountpoint/"$i"
 					exit 0
 				fi
 
@@ -220,8 +220,8 @@ then
 					else
 						RMMODE="rm -f"
 					fi
-					umount /media/"$i"
-					rmdir /media/"$i"
+					umount /tmp/mountpoint/"$i"
+					rmdir /tmp/mountpoint/"$i"
 					dd if=/dev/urandom of="$TMP_KEY" bs=1024 count=4 status="$DDSTATUS" && "$RMMODE" "$TMP_KEY"
 					exit 0
 				else
@@ -235,13 +235,13 @@ then
 			if [ "$VERBOSE_MODE" != "0" ]
 			then
 				echo "AuraKey : Too many failed attempts. System will enter emergency mode."
-				umount /media/"$i"
-				rmdir /media/"$i"
+				umount /tmp/mountpoint/"$i"
+				rmdir /tmp/mountpoint/"$i"
 				sleep 1
 				systemctl emergency
 			else
-				umount /media/"$i"
-				rmdir /media/"$i"
+				umount /tmp/mountpoint/"$i"
+				rmdir /tmp/mountpoint/"$i"
 			fi
 			unset PASSWORD
 		fi
