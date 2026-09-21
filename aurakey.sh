@@ -4,7 +4,7 @@
 # Author: Michael Janssen <m.janssen@lyrah.net>
 # License: GPLv3 (See README.md for details)
 
-VERSION="1.9-1"
+VERSION="1.9-2"
 TRIES=0 # needs to be zero to start the loop
 
 # check for config argument
@@ -48,29 +48,45 @@ ask_password() {
     local prompt="$1"
     local pass=""
 
-    # 1. Plymouth is activ
-    if command -v plymouth >/dev/null 2>&1 && plymouth --ping 2>/dev/null
-	then
-        pass=$(plymouth ask-for-password --prompt="$prompt")
-
-    # 2. systemd-ask-password is availably
-    elif command -v systemd-ask-password >/dev/null 2>&1
-	then
-        pass=$(systemd-ask-password "$prompt")
-
-    # 3. Interactives terminal
-    elif [ -t 0 ]
-	then
+    # 1. Check if a functional controlling terminal (TTY) is available
+    if tty -s < /dev/tty 2>/dev/null; then
+        # Standard interactive prompt (used in running desktop/CLI environments and real TTYs)
         echo -n "$prompt " >&2
         read -rs pass
         echo "" >&2
 
-    # 4. Non-Interactiv / Early-Boot without Plymouth/systemd (OpenRC/SysVinit at /dev/tty)
-    elif [ -c /dev/tty ]
-	then
-        echo -n "$prompt " >/dev/tty
-        read -rs pass </dev/tty
-        echo "" >/dev/tty
+    # 2. SysVinit Early-Boot: No active TTY attached -> Switch context via openvt
+    elif command -v openvt >/dev/null 2>&1; then
+        local tmp_file
+        tmp_file=$(mktemp /tmp/aurakey_pass_XXXXXX)
+
+        # Launch subshell on VT 7 (-c 7), switch screen focus (-s), and block until done (-w)
+        openvt -c 7 -s -w -- /bin/sh -c "
+            stty -echo 2>/dev/null
+            printf '%s ' \"$prompt\"
+            read -r input
+            stty echo 2>/dev/null
+            printf '\n'
+            printf '%s' \"\$input\" > \"$tmp_file\"
+        "
+
+        # Read captured password from RAM tempfile and immediately shred it
+        if [ -f "$tmp_file" ]; then
+            pass=$(cat "$tmp_file")
+            dd if=/dev/urandom of="$tmp_file" bs=1 count=1024 status=none 2>/dev/null
+            rm -f "$tmp_file"
+        fi
+
+        # Return screen focus back to primary console (TTY 1)
+        chvt 1 2>/dev/null || true
+
+    # 3. Fallback: Direct hardware access via /dev/console
+    else
+        printf "%s " "$prompt" > /dev/console
+        stty -F /dev/console -echo 2>/dev/null || true
+        read -r pass < /dev/console
+        stty -F /dev/console echo 2>/dev/null || true
+        printf "\n" > /dev/console
     fi
 
     echo "$pass"
