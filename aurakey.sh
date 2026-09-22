@@ -4,7 +4,7 @@
 # Author: Michael Janssen <m.janssen@lyrah.net>
 # License: GPLv3 (See README.md for details)
 
-VERSION="1.9-3"
+VERSION="1.9-4"
 TRIES=0 # needs to be zero to start the loop
 
 # check for config argument
@@ -49,18 +49,25 @@ ask_password() {
     local prompt="$1"
     local pass=""
 
-    # 1. Interactive terminal available
-    if [ -t 0 ] && tty -s 2>/dev/null; then
+    # 1. Plymouth ist aktiv (Grafischer Boot-Bildschirm)
+    if command -v plymouth >/dev/null 2>&1 && plymouth --ping 2>/dev/null; then
+        # Passwort über Plymouth erfragen
+        pass=$(plymouth ask-for-password --prompt="$prompt")
+        
+        # WICHTIG: Nachricht löschen / Plymouth zurücksetzen
+        plymouth display-message --text="" 2>/dev/null || true
+
+    # 2. Interactive Terminal Fallback
+    elif [ -t 0 ] && tty -s 2>/dev/null; then
         echo -n "$prompt " >&2
         read -rs pass
         echo "" >&2
 
-    # 2. SysVinit / Early-Boot fallback using openvt with force (-f)
+    # 3. SysVinit Early-Boot (openvt Fallback)
     elif command -v openvt >/dev/null 2>&1; then
         local tmp_file
         tmp_file=$(mktemp /run/aurakey_pass_XXXXXX 2>/dev/null || mktemp /tmp/aurakey_pass_XXXXXX)
 
-        # -f forces openvt to use the VT even if allocated, -s switches to it, -w waits
         openvt -f -s -w -- /bin/sh -c "
             stty -echo 2>/dev/null
             printf '%s ' \"$prompt\"
@@ -72,14 +79,10 @@ ask_password() {
 
         if [ -f "$tmp_file" ]; then
             pass=$(cat "$tmp_file")
-            dd if=/dev/urandom of="$tmp_file" bs=1 count=1024 status=none 2>/dev/null
             rm -f "$tmp_file"
         fi
 
-        # Return screen focus back to TTY 1
         chvt 1 2>/dev/null || true
-
-    # 3. Direct console input as last resort
     else
         printf "%s " "$prompt" > /dev/console
         stty -F /dev/console -echo 2>/dev/null || true
@@ -90,7 +93,6 @@ ask_password() {
 
     echo "$pass"
 }
-
 if [[ "$2" == "--silent" ]]
 then
 	VERBOSE_MODE="0"

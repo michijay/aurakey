@@ -28,10 +28,10 @@ case "$1" in
 
         RESULT=0
 
-        # LSB-Meldung vorab ausgeben und Zeile schließen (log_action_msg statt log_daemon_msg)
+        # LSB-Message
         log_action_msg "Starting AuraKey drive decryption..."
 
-        # Zwingend mit Verbindung zur Konsole aufrufen
+        # Check for connection to the tty
         if "$SCRIPT" --decrypt --verbose </dev/tty1 >/dev/tty1 2>&1; then
             log_action_end_msg 0
         else
@@ -49,6 +49,15 @@ case "$1" in
                 RESULT=1
             fi
         fi
+
+		# If Plymouth is still running, exit it
+		if command -v plymouth >/dev/null 2>&1 && plymouth --ping 2>/dev/null; then
+            plymouth update --status="AuraKey finished" 2>/dev/null || true
+            plymouth quit --no-start-daemon 2>/dev/null || plymouth quit 2>/dev/null
+        fi
+
+		# Reset Screen-Focus back to TTY1
+        chvt 1 2>/dev/null || true
 
         exit "$RESULT"
         ;;
