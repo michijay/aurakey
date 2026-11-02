@@ -4,7 +4,7 @@
 # Author: Michael Janssen <m.janssen@lyrah.net>
 # License: GPLv3 (See README.md for details)
 
-VERSION="1.9-4"
+VERSION="1.9-5"
 TRIES=0 # needs to be zero to start the loop
 
 # check for config argument
@@ -49,21 +49,21 @@ ask_password() {
     local prompt="$1"
     local pass=""
 
-    # 1. Plymouth ist aktiv (Grafischer Boot-Bildschirm)
+    # 1. Plymouth is active: Use Plymouth's native password prompt so it's visible on screen
     if command -v plymouth >/dev/null 2>&1 && plymouth --ping 2>/dev/null; then
-        # Passwort über Plymouth erfragen
+        # Ensure Plymouth is ready to accept input and display the prompt
         pass=$(plymouth ask-for-password --prompt="$prompt")
         
-        # WICHTIG: Nachricht löschen / Plymouth zurücksetzen
+        # Clear the prompt message from the splash screen after entry
         plymouth display-message --text="" 2>/dev/null || true
 
-    # 2. Interactive Terminal Fallback
+    # 2. Standard interactive terminal (e.g. manual execution or pure text mode)
     elif [ -t 0 ] && tty -s 2>/dev/null; then
         echo -n "$prompt " >&2
         read -rs pass
         echo "" >&2
 
-    # 3. SysVinit Early-Boot (openvt Fallback)
+    # 3. SysVinit / Early-Boot fallback using openvt (only if Plymouth is NOT running)
     elif command -v openvt >/dev/null 2>&1; then
         local tmp_file
         tmp_file=$(mktemp /run/aurakey_pass_XXXXXX 2>/dev/null || mktemp /tmp/aurakey_pass_XXXXXX)
@@ -79,11 +79,13 @@ ask_password() {
 
         if [ -f "$tmp_file" ]; then
             pass=$(cat "$tmp_file")
+            dd if=/dev/urandom of="$tmp_file" bs=1 count=1024 status=none 2>/dev/null
             rm -f "$tmp_file"
         fi
 
         chvt 1 2>/dev/null || true
     else
+        # Direct console fallback
         printf "%s " "$prompt" > /dev/console
         stty -F /dev/console -echo 2>/dev/null || true
         read -r pass < /dev/console
@@ -93,6 +95,7 @@ ask_password() {
 
     echo "$pass"
 }
+
 if [[ "$2" == "--silent" ]]
 then
 	VERBOSE_MODE="0"
