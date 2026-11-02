@@ -1,0 +1,48 @@
+AuraKey SysVinit & LightDM Integration
+
+This guide outlines how to configure AuraKey under SysVinit (systemd-free environments like Devuan) to run securely before the graphical login manager (lightdm), ensuring LUKS partitions and keyfiles are successfully decrypted before the desktop environment starts.
+1. Required LSB Header Adjustments
+
+To prevent dependency loops (insserv errors) while ensuring LightDM waits for AuraKey to finish, update the LSB headers in both initialization scripts.
+AuraKey Init Script (/etc/init.d/aurakey)
+
+Ensure AuraKey requests local filesystems and declares itself as an interactive service:
+### BEGIN INIT INFO
+# Provides:          aurakey
+# Required-Start:    $local_fs $remote_fs
+# Required-Stop:     $all
+# Should-Start:      
+# Should-Stop:
+# Default-Start:     2 3 4 5
+# Default-Stop:      0 1 6
+# Short-Description: AuraKey Drivecrypt Service
+# X-Interactive:     true
+### END INIT INFO
+
+LightDM Init Script (/etc/init.d/lightdm)
+
+Add aurakey to Should-Start so LightDM delays starting until AuraKey has executed:
+### BEGIN INIT INFO
+# Provides:          lightdm
+# Required-Start:    $local_fs $remote_fs $syslog
+# Should-Start:      $all aurakey
+# Required-Stop:     
+# Default-Start:     2 3 4 5
+# Default-Stop:      0 1 6
+# Short-Description: Light Display Manager
+### END INIT INFO
+
+2. Updating Boot Dependencies
+
+After modifying the LSB headers, refresh the SysVinit runlevel links:
+sudo update-rc.d -f aurakey remove
+sudo update-rc.d -f lightdm remove
+
+sudo update-rc.d aurakey defaults
+sudo update-rc.d lightdm defaults
+
+3. Key Operational Notes
+
+Absolute Paths: Always resolve paths relative to the script directory inside aurakey.sh (e.g., SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"), because SysVinit executes boot scripts with / as the working directory.
+
+Plymouth Handling: If Plymouth is active, AuraKey triggers plymouth ask-for-password natively; otherwise, it falls back to standard text console prompts.
